@@ -3,9 +3,6 @@ name: Build TLA APK
 on:
   workflow_dispatch:
   push:
-    paths:
-      - "TLA (1).zip"
-      - ".github/workflows/main.yml"
 
 jobs:
   build:
@@ -25,10 +22,19 @@ jobs:
         run: |
           mkdir -p app/src/main/java/com/tla/learning
           mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/values
 
           unzip -o "TLA (1).zip" -d extracted
 
-          find extracted -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" \) -exec cp {} app/src/main/assets/ \;
+          HTML_FILE=$(find extracted -type f -iname "*.html" | head -n 1)
+
+          if [ -z "$HTML_FILE" ]; then
+            echo "ERROR: No HTML file found"
+            exit 1
+          fi
+
+          cp -r extracted/. app/src/main/assets/
+          cp "$HTML_FILE" app/src/main/assets/index.html
 
           cat > settings.gradle <<'EOF'
           pluginManagement {
@@ -76,6 +82,16 @@ jobs:
           }
           EOF
 
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+              <style name="AppTheme"
+                  parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#2196F3</item>
+              </style>
+          </resources>
+          EOF
+
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -93,24 +109,13 @@ jobs:
           </manifest>
           EOF
 
-          mkdir -p app/src/main/res/values
-
-          cat > app/src/main/res/values/styles.xml <<'EOF'
-          <resources>
-              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
-                  <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">#2196F3</item>
-              </style>
-          </resources>
-          EOF
-
           cat > app/src/main/java/com/tla/learning/MainActivity.java <<'EOF'
           package com.tla.learning;
 
           import android.app.Activity;
           import android.os.Bundle;
-          import android.webkit.WebView;
           import android.webkit.WebSettings;
+          import android.webkit.WebView;
 
           public class MainActivity extends Activity {
               @Override
@@ -118,11 +123,15 @@ jobs:
                   super.onCreate(savedInstanceState);
 
                   WebView webView = new WebView(this);
+
                   WebSettings settings = webView.getSettings();
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
 
-                  webView.loadUrl("file:///android_asset/TLA_Test_V1-5.html");
+                  webView.loadUrl("file:///android_asset/index.html");
+
                   setContentView(webView);
               }
           }
